@@ -34,54 +34,35 @@ namespace StaticWeaving.MSBuildTasks
                     return false;
                 }
 
-                using (var assembly = AssemblyDefinition.ReadAssembly(AssemblyPath, new ReaderParameters { ReadWrite = true }))
+                using (var notifyPropertyChangedAssembly = AssemblyDefinition.ReadAssembly(typeof(INotifyPropertyChanged).Assembly.Location))
                 {
-                    _notifyPropertyChangedWeaver.WeaveAssembly(assembly);
-                    assembly.Write();
+                    using (var assembly = AssemblyDefinition.ReadAssembly(AssemblyPath, new ReaderParameters { ReadWrite = true }))
+                    {
+                        foreach (var type in assembly.MainModule.Types)
+                        {
+                            if (type.CustomAttributes.Any(x => x.Constructor.DeclaringType.FullName == typeof(NotifyPropertyChangedAttribute).FullName))
+                            {
+                                if (!type.Interfaces.Any(x => x.InterfaceType.FullName == typeof(INotifyPropertyChanged).FullName))
+                                {
+                                    Log.LogMessage($"{type.FullName} has {nameof(NotifyPropertyChangedAttribute)} but no {nameof(INotifyPropertyChanged)} implementation. Weaving...");
+
+                                    var notifyPropertyChangedType = notifyPropertyChangedAssembly.MainModule.Types.FirstOrDefault(x => x.FullName == typeof(INotifyPropertyChanged).FullName);
+
+                                    Log.LogMessage(notifyPropertyChangedType.FullName);
+
+                                    type.Interfaces.Add(new InterfaceImplementation(notifyPropertyChangedType));
+                                }
+                            }
+                        }
+
+                        assembly.Write();
+                    }
                 }
 
-
-                //using (var notifyPropertyChangedAssembly = AssemblyDefinition.ReadAssembly(typeof(INotifyPropertyChanged).Assembly.Location))
+                //using (var assembly = AssemblyDefinition.ReadAssembly(AssemblyPath, new ReaderParameters { ReadWrite = true }))
                 //{
-                //    using (var assembly = AssemblyDefinition.ReadAssembly(AssemblyPath, new ReaderParameters { ReadWrite = true }))
-                //    {
-                //        foreach (var type in assembly.MainModule.Types)
-                //        {
-                //            var attribute = type.CustomAttributes.FirstOrDefault(x => x.Constructor.DeclaringType.FullName == typeof(NotifyPropertyChangedAttribute).FullName);
-
-                //            if (attribute == null)
-                //            {
-                //                continue;
-                //            }
-
-                //            Log.LogMessage($"Weaving into {type.FullName}...");
-
-                //            var notifyPropertyChangedInterfaceImplementation = type.Interfaces.FirstOrDefault(x => x.InterfaceType.FullName == typeof(INotifyPropertyChanged).FullName);
-
-                //            if (notifyPropertyChangedInterfaceImplementation == null)
-                //            {
-                //                Log.LogMessage($"{type.FullName} does not implement {typeof(INotifyPropertyChanged).Name}. Weaving implementation...");
-
-
-                //                var notifyPropertyChangedInterfaceDefinition = notifyPropertyChangedAssembly.MainModule.Types.FirstOrDefault(x => x.FullName == typeof(INotifyPropertyChanged).FullName);
-
-                //                if (notifyPropertyChangedInterfaceDefinition == null)
-                //                {
-                //                    Log.LogError($"No {typeof(INotifyPropertyChanged)} inteface found defined in {notifyPropertyChangedAssembly.FullName}.");
-                //                    continue;
-                //                }
-
-                //                type.Interfaces.Add(new InterfaceImplementation(notifyPropertyChangedInterfaceDefinition));
-                //            }
-
-                //            foreach (var property in type.Properties)
-                //            {
-                //                _notifyPropertyChangedWeaver.WeaveProperty(type, property);
-                //            }
-                //        }
-
-                //        assembly.Write();
-                //    }
+                //    _notifyPropertyChangedWeaver.WeaveAssembly(assembly);
+                //    assembly.Write();
                 //}
 
                 Log.LogMessage("Static weaving complete.");

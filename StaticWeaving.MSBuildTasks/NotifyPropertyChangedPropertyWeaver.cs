@@ -2,7 +2,6 @@
 using Mono.Cecil;
 using Mono.Cecil.Cil;
 using StaticWeaving.Common;
-using System.ComponentModel;
 using System.Linq;
 using System.Runtime.CompilerServices;
 
